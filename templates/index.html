@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<title>GitHub API</title>
+	<meta charset="utf-8">
+	<script src="{{url_for('static', filename='jquery-2.1.1.min.js')}}"></script>
+	<script>
+		var files = {}
+		var rm = {}
+
+		function show_file(e)
+		{
+			e.preventDefault();
+
+			var li = $(this)
+			var path = $(this).data('path');
+			var sha = $(this).data('sha');
+			if (files[path])
+			{
+				$('textarea').hide();
+				files[path]['input'].show();
+				return;
+			}
+
+			$.getJSON('{{url_for('blob_get', sha='')}}' + sha, function(data)
+			{
+				var content = atob(data['content']);
+				var input = $('<textarea></textarea>');
+				input.data('path', path);
+				input.text(content);
+				input.appendTo('#file');
+
+				$('textarea').hide();
+				input.show();
+
+				files[path] = {'input':input, 'content':content, 'li': li};
+			});
+		}
+
+		function new_file(e)
+		{
+			e.preventDefault();
+
+			var path = prompt('Enter file path');
+			if (path === null || path === '' || files[path])
+				return;
+
+			if (rm[path])
+			{
+				delete rm[path];
+			}
+
+			var li = $('<li>'+path+'</li>');
+			li.data('path', path);
+			li.appendTo('#filelist');
+			li.click(show_file);
+
+			var input = $('<textarea></textarea>');
+			input.data('path', path);
+
+			var input = $('<textarea></textarea>');
+			input.data('path', path);
+			input.appendTo('#file');
+
+			$('textarea').hide();
+			input.show();
+
+			files[path] = {'input':input, 'content': null, 'li': li};
+		}
+
+		function delete_file(e)
+		{
+			e.preventDefault();
+
+			var path = prompt('Enter file path');
+			console.log('"' + path + '"');
+			if (path === null || path === '' || !files[path])
+				return;
+
+			console.log('Removing ' + path);
+			files[path]['input'].remove();
+			files[path]['li'].remove();
+
+			delete files[path];
+
+			rm[path] = true;
+
+			console.log(files);
+		}
+
+		function makeblob(content)
+		{
+			// Gotta do synchronous
+			$.getJSON('{{url_for('blob')}}', 
+			function(data)
+			{
+
+			});
+		}
+
+		function commit(e)
+		{
+			e.preventDefault();
+
+			commit = {'rm':[], 'files': {}}
+
+			for (i in rm)
+			{
+				commit.rm.push(i);
+			}
+
+			for (path in files)
+			{
+				var f = files[path];
+				if (f.input.val() !== f.content)
+				{
+					var sha = makeblob(f.input.val());
+					commit.files[path] = sha;
+				}
+			}
+
+			console.log(commit);
+		}
+
+		$(function()
+		{
+			$.getJSON('{{url_for('blob')}}', function(data)
+			{
+				$.each(data, function(key, val)
+				{
+					var li = $('<li>'+key+'</li>');
+					li.data('sha', val);
+					li.data('path', key);
+					li.appendTo('#filelist');
+
+					li.click(show_file);
+					li.click();
+				});
+			});
+
+			$('#delete').click(delete_file);
+			$('#commit').click(commit);
+			$('#newfile').click(new_file);
+		});
+	</script>
+	<style>
+	html, body {margin: 0; height:100%;}
+	#left {
+		display: block;
+		width: 12%;
+		height: 80%;
+		padding: 10px;
+		float: left;
+	}
+
+	#file {
+		display: block;
+		width: 84%;
+		height: 80%;
+		padding: 10px;
+		float: right;
+	}
+
+	li {
+		color: #4444AA;
+		text-decoration: underline;
+	}
+
+	textarea {
+		display: block;
+		width: 60%;
+		height: 100%;
+	}
+	</style>
+</head>
+<body>
+	<div id="left">
+		<button type="button" id="commit">Commit</button>
+		<button type="button" id="delete">Delete</button>
+		<button type="button" id="newfile">New file</button>
+		<ul id="filelist">
+		</ul>
+	</div>
+	<div id="file">
+
+	</div>
+</body>
+</html>

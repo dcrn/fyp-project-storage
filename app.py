@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 from github import GitHub
 import os
 
@@ -42,20 +42,40 @@ def blob():
 		else:
 			return '{}'
 
-@app.route('/file/<sha>', methods=['GET'])
-def file_get(sha):
+@app.route('/blob/<sha>', methods=['GET'])
+def blob_get(sha):
 	# Get contents of a blob from sha
-
-	pass
+	return jsonify(github.get_blob(repo, sha))
 
 @app.route('/commit', methods=['POST'])
 def commit():
-	# Commit files and removes
-	pass
+	j = request.get_json(silent=True, force=True)
+
+	if not j or 'message' not in j:
+		return '{"msg": "No commit message"}'
+
+	if 'rm' not in j:
+		j['rm'] = []
+
+	if 'files' not in j:
+		j['files'] = {}	
+
+	if len(j['files']) == 0 and len(j['rm']) == 0:
+		return '{"msg": "Nothing to commit"}'
+
+	head = github.get_ref(repo, ref)
+	commit = github.get_commit(repo, head['object']['sha'])
+
+	newtree = github.post_tree(repo, commit['tree']['sha'], j)
+	newcommit = github.post_commit(repo, j['message'], newtree['sha'], commit['sha'])
+	newref = github.post_ref(repo, ref, newcommit['sha'])
+
+	return jsonify(newref)
+
 
 @app.route('/')
 def index():
-	pass
+	return render_template('index.html')
 
 
 if __name__ == '__main__':

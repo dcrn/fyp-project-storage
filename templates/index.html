@@ -5,8 +5,9 @@
 	<meta charset="utf-8">
 	<script src="{{url_for('static', filename='jquery-2.1.1.min.js')}}"></script>
 	<script>
-		var files = {}
-		var rm = {}
+		var commit = null;
+		var files = {};
+		var rm = {};
 
 		function show_file(e)
 		{
@@ -41,7 +42,7 @@
 		{
 			e.preventDefault();
 
-			var path = prompt('Enter file path');
+			var path = prompt('Enter new file path');
 			if (path === null || path === '' || files[path])
 				return;
 
@@ -72,8 +73,7 @@
 		{
 			e.preventDefault();
 
-			var path = prompt('Enter file path');
-			console.log('"' + path + '"');
+			var path = prompt('Enter file path to delete');
 			if (path === null || path === '' || !files[path])
 				return;
 
@@ -84,42 +84,85 @@
 			delete files[path];
 
 			rm[path] = true;
-
-			console.log(files);
 		}
 
-		function makeblob(content)
+		function makeblob(path, content)
 		{
-			// Gotta do synchronous
-			$.getJSON('{{url_for('blob')}}', 
-			function(data)
-			{
-
-			});
+			console.log('Creating blob for file: ' + path);
+			$.post('{{url_for('blob')}}', 
+				JSON.stringify({'content':content}),
+				function(data)
+				{
+					var sha = data['sha'];
+					blob_created(path, sha);
+				},
+				'json');
 		}
 
-		function commit(e)
+		function blob_created(path, sha)
+		{
+			console.log('Blob created for file: ' + path);
+			commit.files[path] = sha;
+
+			for (p in files)
+			{
+				var f = files[p];
+				if (f.input.val() !== f.content && !(p in commit.files))
+				{
+					return;
+				}
+			}
+
+			push_commit();
+		}
+
+		function start_commit(e)
 		{
 			e.preventDefault();
 
-			commit = {'rm':[], 'files': {}}
+			msg = prompt('Enter a commit message');
+			if (msg === null || msg === '')
+			{
+				commit = null
+				return;
+			}
 
+			commit = {'rm':[], 'files': {},'message':msg};
+			
 			for (i in rm)
 			{
 				commit.rm.push(i);
 			}
 
+			var waitforblobs = false;
 			for (path in files)
 			{
 				var f = files[path];
 				if (f.input.val() !== f.content)
 				{
-					var sha = makeblob(f.input.val());
-					commit.files[path] = sha;
+					makeblob(path, f.input.val());
+					waitforblobs = true;
 				}
 			}
 
+			if (!waitforblobs)
+			{
+				push_commit();
+			}
+		}
+
+		function push_commit()
+		{
+			console.log('Pushing commit');
 			console.log(commit);
+			$.post('{{url_for('commit')}}', 
+				JSON.stringify(commit),
+				function(data)
+				{
+					alert('Commit complete');
+					console.log(data);
+				},
+				'json');
 		}
 
 		$(function()
@@ -138,9 +181,9 @@
 				});
 			});
 
-			$('#delete').click(delete_file);
-			$('#commit').click(commit);
+			$('#commit').click(start_commit);
 			$('#newfile').click(new_file);
+			$('#delete').click(delete_file);
 		});
 	</script>
 	<style>
@@ -148,15 +191,16 @@
 	#left {
 		display: block;
 		width: 12%;
-		height: 80%;
+		height: 90%;
 		padding: 10px;
 		float: left;
+		background-color: #eeeeee;
 	}
 
 	#file {
 		display: block;
 		width: 84%;
-		height: 80%;
+		height: 90%;
 		padding: 10px;
 		float: right;
 	}
@@ -166,10 +210,30 @@
 		text-decoration: underline;
 	}
 
+	li:hover { cursor: pointer; }
+
 	textarea {
 		display: block;
 		width: 60%;
 		height: 100%;
+	}
+
+	#loading {
+		display: block;
+		visibility: hidden;
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+
+		font-size: 4em;
+		font-weight: bold;
+
+		background-color: rgba(0, 0, 0, 0.2);
+		vertical-align: middle;
+		line-height: 100%;
+		text-align: center;
 	}
 	</style>
 </head>
@@ -183,6 +247,9 @@
 	</div>
 	<div id="file">
 
+	</div>
+	<div id="loading">
+		Loading
 	</div>
 </body>
 </html>
